@@ -9,6 +9,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -62,7 +64,7 @@ public class DailyRecord {
     private String journal;
 
     @Column(name = "energy_score", nullable = false, precision = 5, scale = 2)
-    private Double energyScore;
+    private BigDecimal energyScore;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "energy_level", nullable = false)
