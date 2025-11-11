@@ -28,9 +28,6 @@ public class User {
     @Column(name = "profile_image_url", length = 255)
     private String profileImageUrl;
 
-    @Column(name = "password_hash", length = 255)
-    private String passwordHash;
-
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
