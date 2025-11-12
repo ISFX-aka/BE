@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import org.hibernate.annotations.CreationTimestamp;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -34,5 +35,11 @@ public class AiPrescriptions {
   @CreationTimestamp
   @Column(name = "created_at", nullable = false, updatable = false)
   private LocalDateTime createdAt;
-  
+
+  @Builder
+  public AiPrescriptions(DailyRecord record, AiPrescriptionCategory category, String recommendationText) {
+    this.record = record;
+    this.category = category;
+    this.recommendationText = recommendationText;
+  }
 }

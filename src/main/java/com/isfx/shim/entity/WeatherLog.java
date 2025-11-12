@@ -2,6 +2,7 @@ package com.isfx.shim.entity;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -47,4 +48,16 @@ public class WeatherLog {
   @CreationTimestamp
   @Column(name = "created_at", nullable = false, updatable = false)
   private LocalDateTime createdAt;
+
+  @Builder
+  public WeatherLog(String location, LocalDateTime observed_at, BigDecimal temperature,
+                   WeatherCondition condition, Short pm10, Short pm25, Short air_quality_index) {
+    this.location = location;
+    this.observed_at = observed_at;
+    this.temperature = temperature;
+    this.condition = condition;
+    this.pm10 = pm10;
+    this.pm25 = pm25;
+    this.air_quality_index = air_quality_index;
+  }
 }
