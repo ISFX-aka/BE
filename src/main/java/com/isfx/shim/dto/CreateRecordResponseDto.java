@@ -38,7 +38,7 @@ public class CreateRecordResponseDto {
     @JsonProperty("weather_log")
     private WeatherLogDto weatherLog;
 
-    // ✅ 내부 클래스: AI 처방 정보
+    // AI 처방 정보
     @Getter
     @Builder
     public static class AiPrescriptionDto {
@@ -52,7 +52,7 @@ public class CreateRecordResponseDto {
         private String recommendationText;
     }
 
-    // ✅ 내부 클래스: 날씨 로그 정보
+    // 날씨 로그 정보
     @Getter
     @Builder
     public static class WeatherLogDto {
