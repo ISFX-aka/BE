@@ -4,15 +4,17 @@ import com.isfx.shim.dto.CreateRecordRequest;
 import com.isfx.shim.dto.CreateRecordResponseDto;
 import com.isfx.shim.entity.*;
 import com.isfx.shim.entity.enums.*;
-import com.isfx.shim.repository.*;
+import com.isfx.shim.global.exception.CustomException;
+import com.isfx.shim.global.exception.ErrorCode;
+import com.isfx.shim.repository.AiPrescriptionsRepository;
+import com.isfx.shim.repository.DailyRecordRepository;
+import com.isfx.shim.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 @Slf4j
@@ -22,9 +24,9 @@ import java.time.LocalTime;
 public class RecordService {
 
     private final DailyRecordRepository dailyRecordRepository;
-    private final WeatherLogRepository weatherLogRepository;
     private final AiPrescriptionsRepository aiPrescriptionsRepository;
     private final UserRepository userRepository;
+    private final WeatherService weatherService;
 
     /**
      * 일일 기록 생성
@@ -36,7 +38,7 @@ public class RecordService {
     public CreateRecordResponseDto createRecord(Long userId, CreateRecordRequest request) {
         // 1. 사용자 조회
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다.")); // TODO: CustomException으로 변경
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         // 2. 현재 날짜 및 시간대 결정
         LocalDate recordDate = LocalDate.now();
@@ -46,7 +48,7 @@ public class RecordService {
         TransportMode transportMode = convertTransportMode(request.getTransportMode());
 
         // 4. 날씨 정보 조회 (외부 API 연동)
-        WeatherLog weatherLog = fetchWeatherData(recordDate, request.getLocation());
+        WeatherLog weatherLog = weatherService.fetchWeatherData(request.getLocation());
 
         // 5. 에너지 점수 계산
         double energyScore = calculateEnergyScore(request, transportMode, weatherLog);
@@ -60,13 +62,10 @@ public class RecordService {
         );
         dailyRecord = dailyRecordRepository.save(dailyRecord);
 
-        // 8. WeatherLog 저장
-        weatherLog = weatherLogRepository.save(weatherLog);
-
-        // 9. AI 처방 생성 (Upstage API 연동)
+        // 8. AI 처방 생성 (Upstage API 연동)
         AiPrescriptions aiPrescription = generateAiPrescription(dailyRecord, request, energyScore);
 
-        // 10. 응답 DTO 생성
+        // 9. 응답 DTO 생성
         return buildResponseDto(dailyRecord, aiPrescription, weatherLog);
     }
 
@@ -101,25 +100,6 @@ public class RecordService {
             case "walk" -> TransportMode.WALK;
             default -> TransportMode.WALK;
         };
-    }
-
-    /**
-     * 날씨 정보 조회 (외부 API 연동)
-     * TODO: 서울시 실시간 자치구별 대기환경 현황 API 연동
-     * TODO: 기상청 단기예보 API 연동
-     * 참고: https://data.seoul.go.kr/dataList/OA-1200/S/1/datasetView.do
-     * 참고: https://www.data.go.kr/data/15084084/openapi.do
-     */
-    private WeatherLog fetchWeatherData(LocalDate date, String location) {
-        // TODO: 외부 API 호출하여 날씨 정보 가져오기
-        // 현재는 더미 데이터 반환
-        return WeatherLog.builder()
-                .location(location)
-                .observed_at(LocalDateTime.now())
-                .temperature(BigDecimal.valueOf(12.5)) // TODO: 외부 API 데이터로 대체
-                .condition(WeatherCondition.clear) // TODO: 외부 API 데이터로 대체
-                .pm10((short) 35) // TODO: 외부 API 데이터로 대체
-                .build();
     }
 
     /**
@@ -165,7 +145,7 @@ public class RecordService {
             return 70.0; // 기본값
         }
 
-        double temperature = weatherLog.getTemperature() != null ? weatherLog.getTemperature().doubleValue() : 21.0;
+        double temperature = weatherLog.getTemperature() != null ? weatherLog.getTemperature() : 21.0;
         WeatherCondition condition = weatherLog.getCondition();
         double pm10 = weatherLog.getPm10() != null ? weatherLog.getPm10() : 30.0;
         double pm25 = weatherLog.getPm25() != null ? weatherLog.getPm25() : 15.0;
@@ -216,13 +196,16 @@ public class RecordService {
             CreateRecordRequest request, TransportMode transportMode,
             double energyScore, EnergyLevel energyLevel) {
         
+        // meetingCount가 null이면 기본값 0으로 설정
+        Integer meetingCount = request.getMeetingCount() != null ? request.getMeetingCount() : 0;
+        
         return DailyRecord.builder()
                 .user(user)
                 .recordDate(recordDate)
                 .timePeriod(timePeriod)
                 .emotionLevel(request.getEmotionLevel())
                 .conversationLevel(request.getConversationLevel())
-                .meetingCount(request.getMeetingCount())
+                .meetingCount(meetingCount)
                 .transportMode(transportMode)
                 .congestionLevel(request.getCongestionLevel())
                 .location(request.getLocation())
@@ -234,7 +217,6 @@ public class RecordService {
 
     /**
      * AI 처방 생성 (Upstage API 연동)
-     * TODO: Upstage API 연동하여 자연어 처방 생성
      */
     private AiPrescriptions generateAiPrescription(
             DailyRecord dailyRecord, CreateRecordRequest request, double energyScore) {
@@ -243,8 +225,8 @@ public class RecordService {
         // 현재는 더미 데이터 생성
         AiPrescriptions prescription = AiPrescriptions.builder()
                 .record(dailyRecord)
-                .category(AiPrescriptionCategory.recovery) // TODO: 에너지 점수 기반 추천 로직으로 대체
-                .recommendationText("오늘은 사회적 에너지가 많이 소모되었네요. 저녁에는 좋아하는 음악을 들으며 휴식하는 것을 추천합니다.") // TODO: Upstage API 응답으로 대체
+                .category(AiPrescriptionCategory.recovery)
+                .recommendationText("mock데이터 - 오늘은 사회적 에너지가 많이 소모되었네요. 저녁에는 좋아하는 음악을 들으며 휴식하는 것을 추천합니다.") // TODO: Upstage API 응답으로 대체
                 .build();
         
         return aiPrescriptionsRepository.save(prescription);
@@ -267,8 +249,8 @@ public class RecordService {
                 CreateRecordResponseDto.WeatherLogDto.builder()
                         .id(weatherLog.getWeather_log_id())
                         .location(weatherLog.getLocation())
-                        .condition(weatherLog.getCondition().name())
-                        .temperature(weatherLog.getTemperature().doubleValue())
+                        .condition(weatherLog.getCondition() != null ? weatherLog.getCondition().name() : null)
+                        .temperature(weatherLog.getTemperature())
                         .pm10(weatherLog.getPm10() != null ? weatherLog.getPm10().intValue() : null)
                         .build();
 

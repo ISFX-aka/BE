@@ -6,7 +6,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -29,20 +28,20 @@ public class WeatherLog {
   @Column(name = "observed_at", nullable = false)
   private LocalDateTime observed_at;
 
-  @Column(name = "temperature", nullable = false, precision = 4, scale = 1)
-  private BigDecimal temperature;
+  @Column(name = "temperature", nullable = false)
+  private Double temperature;
 
   @Enumerated(EnumType.STRING)
-  @Column(name = "condition", nullable = false, columnDefinition = "ENUM('clear', 'clouds', 'rain', 'snow', 'other')")
+  @Column(name = "weather_condition", nullable = false, columnDefinition = "ENUM('clear', 'clouds', 'rain', 'snow', 'other')")
   private WeatherCondition condition;
 
-  @Column(name = "pm10")
+  @Column(name = "pm10", nullable = false)
   private Short pm10;
 
-  @Column(name = "pm25")
+  @Column(name = "pm25", nullable = false)
   private Short pm25;
 
-  @Column(name = "air_quality_index")
+  @Column(name = "air_quality_index", nullable = false)
   private Short air_quality_index;
 
   @CreationTimestamp
@@ -50,7 +49,7 @@ public class WeatherLog {
   private LocalDateTime createdAt;
 
   @Builder
-  public WeatherLog(String location, LocalDateTime observed_at, BigDecimal temperature,
+  public WeatherLog(String location, LocalDateTime observed_at, Double temperature,
                    WeatherCondition condition, Short pm10, Short pm25, Short air_quality_index) {
     this.location = location;
     this.observed_at = observed_at;
