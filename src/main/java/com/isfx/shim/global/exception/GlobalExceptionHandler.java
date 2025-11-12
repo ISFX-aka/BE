@@ -24,7 +24,7 @@ public class GlobalExceptionHandler {
     // 2. 그 외 처리되지 않은 모든 예외
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleException(Exception e) {
-        log.error("Unhandled exception occurred", e); // ⭐️ 에러 로그는 꼭 남겨야 합니다.
+        log.error("Unhandled exception occurred", e);
 
         return ResponseEntity
                 .status(ErrorCode.INTERNAL_SERVER_ERROR.getStatus())
