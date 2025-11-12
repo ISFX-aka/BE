@@ -64,7 +64,7 @@ public class DailyRecord {
     private String journal;
 
     @Column(name = "energy_score", nullable = false, precision = 5, scale = 2)
-    private BigDecimal energyScore;
+    private double energyScore;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "energy_level", nullable = false)
