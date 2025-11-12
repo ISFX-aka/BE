@@ -1,0 +1,13 @@
+package com.isfx.shim.repository;
+
+import com.isfx.shim.entity.DailyRecord;
+import com.isfx.shim.entity.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.time.LocalDate;
+import java.util.List;
+
+public interface DailyRecordRepository extends JpaRepository<DailyRecord, Long> {
+
+    // (GET /me/status) 통계 계산을 위한 특정 기간의 기록 조회
+    List<DailyRecord> findAllByUserAndRecordDateBetween(User user, LocalDate startDate, LocalDate endDate);
+}
