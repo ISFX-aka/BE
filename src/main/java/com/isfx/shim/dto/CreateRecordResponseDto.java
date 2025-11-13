@@ -70,5 +70,11 @@ public class CreateRecordResponseDto {
 
         @JsonProperty("pm10")
         private Integer pm10;
+
+        @JsonProperty("pm25")
+        private Integer pm25;
+
+        @JsonProperty("air_quality_index")
+        private Integer airQualityIndex;
     }
 }

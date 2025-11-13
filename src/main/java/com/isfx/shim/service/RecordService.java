@@ -125,7 +125,12 @@ public class RecordService {
         double energyScore = (0.4 * socialScore) + (0.3 * movementScore) + (0.3 * weatherScore);
         
         // 점수를 0~100 범위로 제한
-        return Math.max(0, Math.min(100, energyScore));
+        energyScore = Math.max(0, Math.min(100, energyScore));
+        
+        // 소수점 2자리로 반올림
+        energyScore = Math.round(energyScore * 100.0) / 100.0;
+        
+        return energyScore;
     }
 
     /**
@@ -396,6 +401,8 @@ public class RecordService {
                         .condition(weatherLog.getCondition() != null ? weatherLog.getCondition().name() : null)
                         .temperature(weatherLog.getTemperature())
                         .pm10(weatherLog.getPm10() != null ? weatherLog.getPm10().intValue() : null)
+                        .pm25(weatherLog.getPm25() != null ? weatherLog.getPm25().intValue() : null)
+                        .airQualityIndex(weatherLog.getAir_quality_index() != null ? weatherLog.getAir_quality_index().intValue() : null)
                         .build();
 
         return CreateRecordResponseDto.builder()

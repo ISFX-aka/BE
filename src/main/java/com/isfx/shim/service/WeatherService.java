@@ -27,15 +27,22 @@ public class WeatherService {
         boolean isMockData = false;
 
         // 대기오염 API 호출 (서울시 대기질 정보 API)
+        log.info("[대기오염 API] 서울시 대기질 정보 API 호출 시작: location={}", normalizedLocation);
         AirQualityResponseDto airQuality;
         try {
             airQuality = airQualityClient.getAirQuality(normalizedLocation);
+            log.info("[대기오염 API] API 호출 완료, 받은 데이터: pm10={}, pm25={}, airQualityIndex={}", 
+                    airQuality.getPm10(), airQuality.getPm25(), airQuality.getAirQualityIndex());
+            
             // Mock 데이터 확인 (기본 mock 값: pm10=30, pm25=15, cai=50)
             if (airQuality.getPm10() != null && airQuality.getPm10() == 30 && 
                 airQuality.getPm25() != null && airQuality.getPm25() == 15 &&
                 airQuality.getAirQualityIndex() != null && airQuality.getAirQualityIndex() == 50) {
                 log.warn("[대기오염 API] 서울시 대기질 정보 API 호출 실패 또는 데이터 없음, mock 데이터 사용: location={}", normalizedLocation);
                 isMockData = true;
+            } else {
+                log.info("[대기오염 API] 실제 API 데이터 사용: pm10={}, pm25={}, airQualityIndex={}", 
+                        airQuality.getPm10(), airQuality.getPm25(), airQuality.getAirQualityIndex());
             }
         } catch (Exception e) {
             log.error("[대기오염 API] 서울시 대기질 정보 API 호출 실패, mock 데이터 사용: location={}, error={}", normalizedLocation, e.getMessage(), e);
