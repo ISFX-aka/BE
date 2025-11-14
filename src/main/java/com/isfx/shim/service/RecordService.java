@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.isfx.shim.dto.CreateRecordRequest;
 import com.isfx.shim.dto.CreateRecordResponseDto;
 import com.isfx.shim.dto.UpdateRecordRequest;
+import com.isfx.shim.dto.RecordSummaryDto;
 import com.isfx.shim.entity.*;
 import com.isfx.shim.entity.enums.*;
 import com.isfx.shim.global.exception.CustomException;
@@ -19,6 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.YearMonth;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -68,7 +72,7 @@ public class RecordService {
 
         // 7. DailyRecord 생성 및 저장
         DailyRecord dailyRecord = createDailyRecord(
-                user, recordDate, timePeriod, request, transportMode, energyScore, energyLevel
+                user, recordDate, timePeriod, request, transportMode, energyScore, energyLevel, weatherLog
         );
         dailyRecord = dailyRecordRepository.save(dailyRecord);
 
@@ -108,7 +112,8 @@ public class RecordService {
                 request.getLocation(),
                 request.getJournal(),
                 energyScore,
-                energyLevel
+                energyLevel,
+                weatherLog
         );
         dailyRecord = dailyRecordRepository.save(dailyRecord);
 
@@ -143,6 +148,57 @@ public class RecordService {
         aiPrescriptionsRepository.findByRecord(dailyRecord)
                 .ifPresent(aiPrescriptionsRepository::delete);
         dailyRecordRepository.delete(dailyRecord);
+    }
+
+    /**
+     * 기록 상세 조회
+     */
+    @Transactional(readOnly = true)
+    public CreateRecordResponseDto getRecordDetail(Long userId, Long recordId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        DailyRecord dailyRecord = dailyRecordRepository.findById(recordId)
+                .orElseThrow(() -> new CustomException(ErrorCode.RECORD_NOT_FOUND));
+
+        if (!dailyRecord.getUser().getId().equals(user.getId())) {
+            throw new CustomException(ErrorCode.RECORD_FORBIDDEN);
+        }
+
+        AiPrescriptions aiPrescription = aiPrescriptionsRepository.findByRecord(dailyRecord)
+                .orElse(null);
+
+        WeatherLog weatherLog = dailyRecord.getWeatherLog();
+
+        return buildResponseDto(dailyRecord, aiPrescription, weatherLog);
+    }
+
+    /**
+     * 월별 기록 요약 조회
+     */
+    @Transactional(readOnly = true)
+    public List<RecordSummaryDto> getMonthlyRecords(Long userId, Integer year, Integer month) {
+        if (year == null || month == null || month < 1 || month > 12) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        YearMonth yearMonth = YearMonth.of(year, month);
+        LocalDate startDate = yearMonth.atDay(1);
+        LocalDate endDate = yearMonth.atEndOfMonth();
+
+        List<DailyRecord> records = dailyRecordRepository.findAllByUserAndRecordDateBetween(
+                user, startDate, endDate);
+
+        return records.stream()
+                .map(record -> RecordSummaryDto.builder()
+                        .recordId(record.getId())
+                        .recordDate(record.getRecordDate())
+                        .energyScore(record.getEnergyScore())
+                        .build())
+                .collect(Collectors.toList());
     }
 
     /**
@@ -419,7 +475,7 @@ public class RecordService {
     private DailyRecord createDailyRecord(
             User user, LocalDate recordDate, TimePeriod timePeriod,
             CreateRecordRequest request, TransportMode transportMode,
-            double energyScore, EnergyLevel energyLevel) {
+            double energyScore, EnergyLevel energyLevel, WeatherLog weatherLog) {
         
         // meetingCount가 null이면 기본값 0으로 설정
         Integer meetingCount = request.getMeetingCount() != null ? request.getMeetingCount() : 0;
@@ -437,6 +493,7 @@ public class RecordService {
                 .journal(request.getJournal())
                 .energyScore(energyScore)
                 .energyLevel(energyLevel)
+                .weatherLog(weatherLog)
                 .build();
     }
 
@@ -648,22 +705,27 @@ public class RecordService {
     private CreateRecordResponseDto buildResponseDto(
             DailyRecord dailyRecord, AiPrescriptions aiPrescription, WeatherLog weatherLog) {
         
-        CreateRecordResponseDto.AiPrescriptionDto aiPrescriptionDto =
-                CreateRecordResponseDto.AiPrescriptionDto.builder()
-                        .id(aiPrescription.getPrescription_id())
-                        .category(aiPrescription.getCategory().name())
-                        .recommendationText(aiPrescription.getRecommendationText())
-                        .journalExplain(aiPrescription.getJournalExplain())
-                        .build();
+        CreateRecordResponseDto.AiPrescriptionDto aiPrescriptionDto = null;
+        if (aiPrescription != null) {
+            aiPrescriptionDto = CreateRecordResponseDto.AiPrescriptionDto.builder()
+                    .id(aiPrescription.getPrescription_id())
+                    .category(aiPrescription.getCategory().name())
+                    .recommendationText(aiPrescription.getRecommendationText())
+                    .journalExplain(aiPrescription.getJournalExplain())
+                    .build();
+        }
 
-        CreateRecordResponseDto.WeatherLogDto weatherLogDto =
-                CreateRecordResponseDto.WeatherLogDto.builder()
-                        .id(weatherLog.getWeather_log_id())
-                        .location(weatherLog.getLocation())
-                        .condition(weatherLog.getCondition() != null ? weatherLog.getCondition().name() : null)
-                        .temperature(weatherLog.getTemperature())
-                        .pm10(weatherLog.getPm10() != null ? weatherLog.getPm10().intValue() : null)
-                        .build();
+        CreateRecordResponseDto.WeatherLogDto weatherLogDto = null;
+        if (weatherLog != null) {
+            weatherLogDto = CreateRecordResponseDto.WeatherLogDto.builder()
+                    .id(weatherLog.getWeather_log_id())
+                    .location(weatherLog.getLocation())
+                    .observedAt(weatherLog.getObserved_at())
+                    .condition(weatherLog.getCondition() != null ? weatherLog.getCondition().name() : null)
+                    .temperature(weatherLog.getTemperature())
+                    .pm10(weatherLog.getPm10() != null ? weatherLog.getPm10().intValue() : null)
+                    .build();
+        }
 
         return CreateRecordResponseDto.builder()
                 .recordId(dailyRecord.getId())

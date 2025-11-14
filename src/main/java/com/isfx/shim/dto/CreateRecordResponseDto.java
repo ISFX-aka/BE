@@ -91,6 +91,10 @@ public class CreateRecordResponseDto {
         @JsonProperty("location")
         private String location;
 
+        @JsonProperty("observed_at")
+        @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'")
+        private LocalDateTime observedAt;
+
         @JsonProperty("condition")
         private String condition;
 

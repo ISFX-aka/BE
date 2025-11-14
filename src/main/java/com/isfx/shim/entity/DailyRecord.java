@@ -29,10 +29,9 @@ public class DailyRecord {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    // (WeatherLog 엔티티가 있다는 가정 하에)
-    // @OneToOne(fetch = FetchType.LAZY)
-    // @JoinColumn(name = "weather_log_id", nullable = false)
-    // private WeatherLog weatherLog;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "weather_log_id")
+    private WeatherLog weatherLog;
 
     @Column(name = "record_date", nullable = false)
     private LocalDate recordDate;
@@ -82,7 +81,7 @@ public class DailyRecord {
     public DailyRecord(User user, LocalDate recordDate, TimePeriod timePeriod,
                       Integer emotionLevel, Integer conversationLevel, Integer meetingCount,
                       TransportMode transportMode, Integer congestionLevel, String location,
-                      String journal, double energyScore, EnergyLevel energyLevel) {
+                      String journal, double energyScore, EnergyLevel energyLevel, WeatherLog weatherLog) {
         this.user = user;
         this.recordDate = recordDate;
         this.timePeriod = timePeriod;
@@ -95,11 +94,12 @@ public class DailyRecord {
         this.journal = journal;
         this.energyScore = energyScore;
         this.energyLevel = energyLevel;
+        this.weatherLog = weatherLog;
     }
 
     public void updateRecord(Integer emotionLevel, Integer conversationLevel, Integer meetingCount,
                              TransportMode transportMode, Integer congestionLevel, String location,
-                             String journal, double energyScore, EnergyLevel energyLevel) {
+                             String journal, double energyScore, EnergyLevel energyLevel, WeatherLog weatherLog) {
         this.emotionLevel = emotionLevel;
         this.conversationLevel = conversationLevel;
         this.meetingCount = meetingCount != null ? meetingCount : 0;
@@ -109,5 +109,6 @@ public class DailyRecord {
         this.journal = journal;
         this.energyScore = energyScore;
         this.energyLevel = energyLevel;
+        this.weatherLog = weatherLog;
     }
 }
