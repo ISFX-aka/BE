@@ -52,4 +52,17 @@ public class RecordController {
 
         return ApiResponse.success(response);
     }
+
+    /**
+     * 기록 삭제 API
+     */
+    @DeleteMapping("/{recordId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteRecord(
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
+            @PathVariable("recordId") Long recordId) {
+
+        Long userId = userDetails.getUser().getId();
+        recordService.deleteRecord(userId, recordId);
+    }
 }

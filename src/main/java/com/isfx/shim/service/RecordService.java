@@ -126,6 +126,26 @@ public class RecordService {
     }
 
     /**
+     * 기록 삭제
+     */
+    @Transactional
+    public void deleteRecord(Long userId, Long recordId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        DailyRecord dailyRecord = dailyRecordRepository.findById(recordId)
+                .orElseThrow(() -> new CustomException(ErrorCode.RECORD_NOT_FOUND));
+
+        if (!dailyRecord.getUser().getId().equals(user.getId())) {
+            throw new CustomException(ErrorCode.RECORD_FORBIDDEN);
+        }
+
+        aiPrescriptionsRepository.findByRecord(dailyRecord)
+                .ifPresent(aiPrescriptionsRepository::delete);
+        dailyRecordRepository.delete(dailyRecord);
+    }
+
+    /**
      * 현재 시간대 결정
      */
     private TimePeriod determineTimePeriod() {
