@@ -1,8 +1,13 @@
 package com.isfx.shim.controller;
 
+import com.isfx.shim.dto.UserRequestDto.UserUpdateReqDto;
+import com.isfx.shim.dto.UserResponseDto.UserMyInfoGetResDto;
+import com.isfx.shim.dto.UserResponseDto.UserStatsGetResDto;
+import com.isfx.shim.dto.UserResponseDto.UserUpdateResDto;
 import com.isfx.shim.global.common.ApiResponse;
 import com.isfx.shim.global.security.UserDetailsImpl;
 import com.isfx.shim.service.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -13,7 +18,7 @@ import java.util.Map;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/users/me")
+@RequestMapping("/api/users/me") // default 경로
 public class UserController {
 
     private final UserService userService;
@@ -47,5 +52,52 @@ public class UserController {
         Long userId = userDetails.getUser().getId();
         userService.deleteProfileImage(userId);
         return ApiResponse.success("프로필 이미지가 성공적으로 삭제되었습니다.");
+    }
+
+    // GET /api/users/me (내 정보 조회)
+    @GetMapping
+    @ResponseStatus(HttpStatus.OK)
+    public ApiResponse<Object> getMyInfo(
+            @AuthenticationPrincipal UserDetailsImpl userDetails
+    ) {
+        Long userId = userDetails.getUser().getId();
+        UserMyInfoGetResDto response = userService.getUserInfo(userId);
+        return ApiResponse.success(response);
+    }
+
+    // PUT /api/users/me (내 정보 수정 - 닉네임)
+    @PutMapping
+    @ResponseStatus(HttpStatus.OK)
+    public ApiResponse<Object> updateMyInfo(
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
+            @Valid @RequestBody UserUpdateReqDto requestDto // @Valid로 DTO 유효성 검사
+    ) {
+        Long userId = userDetails.getUser().getId();
+        UserUpdateResDto response = userService.updateUserInfo(userId, requestDto);
+        return ApiResponse.success(response);
+    }
+
+    // DELETE /api/users/me (회원 탈퇴)
+    @DeleteMapping
+    @ResponseStatus(HttpStatus.OK) // (API 명세는 204 No Content지만, 기존 컨트롤러 패턴(ApiResponse)을 따름)
+    public ApiResponse<Object> deleteMyAccount(
+            @AuthenticationPrincipal UserDetailsImpl userDetails
+    ) {
+        Long userId = userDetails.getUser().getId();
+        userService.deleteUser(userId);
+        return ApiResponse.success("회원 탈퇴가 성공적으로 처리되었습니다.");
+    }
+
+    // GET /api/users/me/status (내 활동 통계 조회)
+    @GetMapping("/status")
+    @ResponseStatus(HttpStatus.OK)
+    public ApiResponse<Object> getMyStats(
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
+            @RequestParam("period") String period,
+            @RequestParam(value = "date", required = false) String date
+    ) {
+        Long userId = userDetails.getUser().getId();
+        UserStatsGetResDto response = userService.getUserStats(userId, period, date);
+        return ApiResponse.success(response);
     }
 }
