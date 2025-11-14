@@ -30,16 +30,4 @@ public class AuthController {
         return ApiResponse.success(Map.of("token", jwtToken));
     }
 
-    /**
-     * 테스트용 사용자 생성 및 토큰 발급 API (개발 환경 전용)
-     * @param email 테스트용 이메일 (선택, 기본값: test@example.com)
-     * @return JWT 토큰
-     */
-    @PostMapping("/test/token")
-    @ResponseStatus(HttpStatus.OK)
-    public ApiResponse<Object> getTestToken(@RequestParam(required = false, defaultValue = "test@example.com") String email) {
-        String jwtToken = authService.createTestUserAndToken(email);
-        return ApiResponse.success(Map.of("token", jwtToken, "email", email));
-    }
-
 }

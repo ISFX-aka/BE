@@ -136,21 +136,5 @@ public class AuthService {
         });
     }
 
-    /**
-     * 테스트용 사용자 생성 및 토큰 발급 (개발 환경 전용)
-     */
-    @Transactional
-    public String createTestUserAndToken(String email) {
-        User user = userRepository.findByEmail(email).orElseGet(() -> {
-            log.info("테스트용 사용자 생성: {}", email);
-            User testUser = User.builder()
-                    .email(email)
-                    .name("테스트 사용자")
-                    .role(Role.ROLE_USER)
-                    .build();
-            return userRepository.save(testUser);
-        });
-        return jwtUtil.createToken(user.getEmail());
-    }
 
 }
