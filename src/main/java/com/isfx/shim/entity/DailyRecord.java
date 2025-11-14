@@ -5,12 +5,12 @@ import com.isfx.shim.entity.enums.TimePeriod;
 import com.isfx.shim.entity.enums.TransportMode;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -63,7 +63,7 @@ public class DailyRecord {
     @Column(columnDefinition = "TEXT")
     private String journal;
 
-    @Column(name = "energy_score", nullable = false, precision = 5, scale = 2)
+    @Column(name = "energy_score", nullable = false)
     private double energyScore;
 
     @Enumerated(EnumType.STRING)
@@ -77,4 +77,23 @@ public class DailyRecord {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @Builder
+    public DailyRecord(User user, LocalDate recordDate, TimePeriod timePeriod,
+                      Integer emotionLevel, Integer conversationLevel, Integer meetingCount,
+                      TransportMode transportMode, Integer congestionLevel, String location,
+                      String journal, double energyScore, EnergyLevel energyLevel) {
+        this.user = user;
+        this.recordDate = recordDate;
+        this.timePeriod = timePeriod;
+        this.emotionLevel = emotionLevel;
+        this.conversationLevel = conversationLevel;
+        this.meetingCount = meetingCount;
+        this.transportMode = transportMode;
+        this.congestionLevel = congestionLevel;
+        this.location = location;
+        this.journal = journal;
+        this.energyScore = energyScore;
+        this.energyLevel = energyLevel;
+    }
 }

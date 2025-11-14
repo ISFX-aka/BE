@@ -1,6 +1,5 @@
 package com.isfx.shim.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.isfx.shim.dto.KakaoLoginRequestDto;
@@ -136,4 +135,6 @@ public class AuthService {
             return userRepository.save(newUser);
         });
     }
+
+
 }

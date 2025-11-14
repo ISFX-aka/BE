@@ -29,4 +29,5 @@ public class AuthController {
         // JWT 토큰을 JSON 형태로 반환
         return ApiResponse.success(Map.of("token", jwtToken));
     }
+
 }
