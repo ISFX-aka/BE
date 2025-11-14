@@ -1,5 +1,7 @@
 package com.isfx.shim.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.isfx.shim.dto.CreateRecordRequest;
 import com.isfx.shim.dto.CreateRecordResponseDto;
 import com.isfx.shim.entity.*;
@@ -27,6 +29,8 @@ public class RecordService {
     private final AiPrescriptionsRepository aiPrescriptionsRepository;
     private final UserRepository userRepository;
     private final WeatherService weatherService;
+    private final UpstageChatClient upstageChatClient;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * 일일 기록 생성
@@ -63,7 +67,7 @@ public class RecordService {
         dailyRecord = dailyRecordRepository.save(dailyRecord);
 
         // 8. AI 처방 생성 (Upstage API 연동)
-        AiPrescriptions aiPrescription = generateAiPrescription(dailyRecord, request, energyScore);
+        AiPrescriptions aiPrescription = generateAiPrescription(dailyRecord, request, energyScore, energyLevel, weatherLog);
 
         // 9. 응답 DTO 생성
         return buildResponseDto(dailyRecord, aiPrescription, weatherLog);
@@ -368,17 +372,202 @@ public class RecordService {
      * AI 처방 생성 (Upstage API 연동)
      */
     private AiPrescriptions generateAiPrescription(
-            DailyRecord dailyRecord, CreateRecordRequest request, double energyScore) {
+            DailyRecord dailyRecord, CreateRecordRequest request, double energyScore, 
+            EnergyLevel energyLevel, WeatherLog weatherLog) {
         
-        // TODO: Upstage API 호출하여 자연어 처방 생성
-        // 현재는 더미 데이터 생성
-        AiPrescriptions prescription = AiPrescriptions.builder()
-                .record(dailyRecord)
-                .category(AiPrescriptionCategory.recovery)
-                .recommendationText("mock데이터 - 오늘은 사회적 에너지가 많이 소모되었네요. 저녁에는 좋아하는 음악을 들으며 휴식하는 것을 추천합니다.") // TODO: Upstage API 응답으로 대체
-                .build();
+        try {
+            // 카테고리 결정: LOW/MEDIUM → recovery, HIGH → social
+            AiPrescriptionCategory category = (energyLevel == EnergyLevel.HIGH) 
+                    ? AiPrescriptionCategory.social 
+                    : AiPrescriptionCategory.recovery;
+            
+            // 프롬프트 구성 데이터 준비
+            String journal = dailyRecord.getJournal() != null ? dailyRecord.getJournal() : "";
+            String weatherCondition = weatherLog != null && weatherLog.getCondition() != null 
+                    ? weatherLog.getCondition().name() : "unknown";
+            String temperature = weatherLog != null && weatherLog.getTemperature() != null 
+                    ? String.format("%.1f", weatherLog.getTemperature()) : "unknown";
+            String congestionLevel = request.getCongestionLevel() != null 
+                    ? String.valueOf(request.getCongestionLevel()) : "unknown";
+            String transportMode = dailyRecord.getTransportMode() != null 
+                    ? dailyRecord.getTransportMode().name() : "unknown";
+            
+            // 시스템 프롬프트
+            String systemPrompt = "당신은 사용자의 하루를 분석하고 공감하며 조언을 제공하는 친근한 AI 어시스턴트입니다. " +
+                    "사용자의 일기 내용과 에너지 점수 계산에 사용된 데이터(날씨, 혼잡도 등)를 분석하여 " +
+                    "공감과 이해를 담은 설명과 추천을 제공해야 합니다. " +
+                    "응답은 반드시 JSON 형식으로 제공해야 하며, 다음과 같은 구조를 따라야 합니다: " +
+                    "{\"journal_explain\": \"일기 내용과 에너지 점수 데이터를 분석한 설명 (예: 곧 시험이시군요! 오늘 날씨가 흐려서 괜시리 울적했겠어요.😢)\", " +
+                    "\"recommendation_text\": \"추천 활동 설명 (예: 오늘 운동은 건너뛰고 따뜻한 안대 하고 자기)\"} " +
+                    "journal_explain은 일기 내용과 날씨, 혼잡도 등 에너지 점수에 영향을 준 요소들을 자연스럽게 분석하여 공감하는 문장으로 작성하세요. " +
+                    "recommendation_text는 에너지 레벨에 맞는 활동을 구체적이고 실용적으로 추천하는 문장으로 작성하세요. " +
+                    "응답은 반드시 유효한 JSON 형식이어야 하며, 다른 설명 없이 JSON만 반환해야 합니다.";
+            
+            // 사용자 프롬프트
+            String userPrompt = String.format(
+                    "일기 내용: %s\n" +
+                    "에너지 점수: %.2f\n" +
+                    "에너지 레벨: %s\n" +
+                    "날씨 조건: %s\n" +
+                    "온도: %s°C\n" +
+                    "혼잡도: %s\n" +
+                    "교통수단: %s\n" +
+                    "감정 수준: %d\n" +
+                    "대화 수준: %d\n" +
+                    "만남 횟수: %d\n\n" +
+                    "위 정보를 바탕으로 journal_explain과 recommendation_text를 생성해주세요.",
+                    journal,
+                    energyScore,
+                    energyLevel.name(),
+                    weatherCondition,
+                    temperature,
+                    congestionLevel,
+                    transportMode,
+                    request.getEmotionLevel() != null ? request.getEmotionLevel() : 0,
+                    request.getConversationLevel() != null ? request.getConversationLevel() : 0,
+                    request.getMeetingCount() != null ? request.getMeetingCount() : 0
+            );
+            
+            // Upstage API 호출
+            String apiResponse = upstageChatClient.generateChatResponse(systemPrompt, userPrompt);
+            
+            // JSON 파싱
+            String journalExplain = parseJsonField(apiResponse, "journal_explain");
+            String recommendationText = parseJsonField(apiResponse, "recommendation_text");
+            
+            // 파싱 실패 시 기본값 사용
+            if (journalExplain == null || journalExplain.trim().isEmpty()) {
+                journalExplain = generateDefaultJournalExplain(journal, weatherLog, energyLevel);
+            }
+            if (recommendationText == null || recommendationText.trim().isEmpty()) {
+                recommendationText = generateDefaultRecommendationText(energyLevel, category);
+            }
+            
+            // AiPrescriptions 생성
+            AiPrescriptions prescription = AiPrescriptions.builder()
+                    .record(dailyRecord)
+                    .category(category)
+                    .recommendationText(recommendationText)
+                    .journalExplain(journalExplain)
+                    .build();
+            
+            return aiPrescriptionsRepository.save(prescription);
+            
+        } catch (Exception e) {
+            log.error("[AI 처방 생성] Upstage API 호출 실패, 기본값 사용: error={}", e.getMessage(), e);
+            
+            // 에러 발생 시 기본값으로 생성
+            AiPrescriptionCategory category = (energyLevel == EnergyLevel.HIGH) 
+                    ? AiPrescriptionCategory.social 
+                    : AiPrescriptionCategory.recovery;
+            
+            String journalExplain = generateDefaultJournalExplain(
+                    dailyRecord.getJournal(), weatherLog, energyLevel);
+            String recommendationText = generateDefaultRecommendationText(energyLevel, category);
+            
+            AiPrescriptions prescription = AiPrescriptions.builder()
+                    .record(dailyRecord)
+                    .category(category)
+                    .recommendationText(recommendationText)
+                    .journalExplain(journalExplain)
+                    .build();
+            
+            return aiPrescriptionsRepository.save(prescription);
+        }
+    }
+    
+    /**
+     * JSON 응답에서 특정 필드 추출
+     */
+    private String parseJsonField(String jsonResponse, String fieldName) {
+        try {
+            // JSON 코드 블록 제거 (```json ... ``` 형식)
+            String cleanedResponse = jsonResponse.trim();
+            if (cleanedResponse.startsWith("```")) {
+                int startIdx = cleanedResponse.indexOf("{");
+                int endIdx = cleanedResponse.lastIndexOf("}");
+                if (startIdx != -1 && endIdx != -1 && endIdx > startIdx) {
+                    cleanedResponse = cleanedResponse.substring(startIdx, endIdx + 1);
+                }
+            }
+            
+            // ObjectMapper를 사용하여 JSON 파싱
+            JsonNode jsonNode = objectMapper.readTree(cleanedResponse);
+            JsonNode fieldNode = jsonNode.get(fieldName);
+            
+            if (fieldNode != null && fieldNode.isTextual()) {
+                return fieldNode.asText();
+            }
+            
+            return null;
+        } catch (Exception e) {
+            log.warn("[JSON 파싱] 필드 추출 실패: field={}, error={}, response={}", 
+                    fieldName, e.getMessage(), jsonResponse.substring(0, Math.min(200, jsonResponse.length())));
+            
+            // 정규식으로 폴백 시도
+            try {
+                String searchPattern = "\"" + fieldName + "\"\\s*:\\s*\"([^\"]*(?:\\\\.[^\"]*)*)\"";
+                java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(searchPattern);
+                java.util.regex.Matcher matcher = pattern.matcher(jsonResponse);
+                
+                if (matcher.find()) {
+                    return matcher.group(1).replace("\\\"", "\"").replace("\\n", "\n").replace("\\\\", "\\");
+                }
+            } catch (Exception ex) {
+                log.warn("[JSON 파싱] 정규식 파싱도 실패: field={}", fieldName);
+            }
+            
+            return null;
+        }
+    }
+    
+    /**
+     * 기본 journal_explain 생성
+     */
+    private String generateDefaultJournalExplain(String journal, WeatherLog weatherLog, EnergyLevel energyLevel) {
+        StringBuilder explain = new StringBuilder();
         
-        return aiPrescriptionsRepository.save(prescription);
+        if (journal != null && !journal.trim().isEmpty()) {
+            explain.append("일기를 작성해주셨네요. ");
+        }
+        
+        if (weatherLog != null) {
+            if (weatherLog.getCondition() != null) {
+                String condition = switch (weatherLog.getCondition()) {
+                    case clear -> "맑은";
+                    case clouds -> "흐린";
+                    case rain -> "비 오는";
+                    case snow -> "눈 오는";
+                    case other -> "변화무쌍한";
+                };
+                explain.append(String.format("오늘 날씨가 %s 날씨였네요. ", condition));
+            }
+        }
+        
+        if (energyLevel == EnergyLevel.LOW) {
+            explain.append("에너지가 많이 소모된 하루였을 것 같아요.");
+        } else if (energyLevel == EnergyLevel.MEDIUM) {
+            explain.append("보통의 하루를 보내셨네요.");
+        } else {
+            explain.append("활기찬 하루를 보내셨네요!");
+        }
+        
+        return explain.toString();
+    }
+    
+    /**
+     * 기본 recommendationText 생성
+     */
+    private String generateDefaultRecommendationText(EnergyLevel energyLevel, AiPrescriptionCategory category) {
+        if (category == AiPrescriptionCategory.recovery) {
+            return switch (energyLevel) {
+                case LOW -> "오늘은 충분한 휴식을 취하시고, 따뜻한 차 한 잔과 함께 편안한 시간을 보내세요.";
+                case MEDIUM -> "가벼운 스트레칭이나 산책을 통해 몸과 마음을 이완시켜보세요.";
+                default -> "적당한 휴식과 함께 내일을 위한 준비를 해보세요.";
+            };
+        } else {
+            return "에너지가 충만하시네요! 친구들과 만나거나 새로운 활동을 시도해보세요.";
+        }
     }
 
     /**
@@ -392,6 +581,7 @@ public class RecordService {
                         .id(aiPrescription.getPrescription_id())
                         .category(aiPrescription.getCategory().name())
                         .recommendationText(aiPrescription.getRecommendationText())
+                        .journalExplain(aiPrescription.getJournalExplain())
                         .build();
 
         CreateRecordResponseDto.WeatherLogDto weatherLogDto =
@@ -401,8 +591,6 @@ public class RecordService {
                         .condition(weatherLog.getCondition() != null ? weatherLog.getCondition().name() : null)
                         .temperature(weatherLog.getTemperature())
                         .pm10(weatherLog.getPm10() != null ? weatherLog.getPm10().intValue() : null)
-                        .pm25(weatherLog.getPm25() != null ? weatherLog.getPm25().intValue() : null)
-                        .airQualityIndex(weatherLog.getAir_quality_index() != null ? weatherLog.getAir_quality_index().intValue() : null)
                         .build();
 
         return CreateRecordResponseDto.builder()
@@ -411,6 +599,7 @@ public class RecordService {
                 .recordDate(dailyRecord.getRecordDate())
                 .journal(dailyRecord.getJournal())
                 .energyScore(dailyRecord.getEnergyScore())
+                .energyLevel(dailyRecord.getEnergyLevel())
                 .createdAt(dailyRecord.getCreatedAt())
                 .aiPrescription(aiPrescriptionDto)
                 .weatherLog(weatherLogDto)

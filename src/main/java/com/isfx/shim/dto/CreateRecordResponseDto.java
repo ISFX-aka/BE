@@ -2,6 +2,7 @@ package com.isfx.shim.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.isfx.shim.entity.enums.EnergyLevel;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -28,6 +29,9 @@ public class CreateRecordResponseDto {
     @JsonProperty("energy_score")
     private Double energyScore;
 
+    @JsonProperty("energy_level")
+    private EnergyLevel energyLevel;
+
     @JsonProperty("created_at")
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'")
     private LocalDateTime createdAt;
@@ -50,6 +54,9 @@ public class CreateRecordResponseDto {
 
         @JsonProperty("recommendation_text")
         private String recommendationText;
+
+        @JsonProperty("journal_explain")
+        private String journalExplain;
     }
 
     // 날씨 로그 정보
@@ -70,11 +77,5 @@ public class CreateRecordResponseDto {
 
         @JsonProperty("pm10")
         private Integer pm10;
-
-        @JsonProperty("pm25")
-        private Integer pm25;
-
-        @JsonProperty("air_quality_index")
-        private Integer airQualityIndex;
     }
 }

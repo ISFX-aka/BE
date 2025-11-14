@@ -32,14 +32,18 @@ public class AiPrescriptions {
   @Column(name = "recommendation_text", nullable = false, columnDefinition = "TEXT")
   private String recommendationText;
 
+  @Column(name = "journal_explain", columnDefinition = "TEXT")
+  private String journalExplain;
+
   @CreationTimestamp
   @Column(name = "created_at", nullable = false, updatable = false)
   private LocalDateTime createdAt;
 
   @Builder
-  public AiPrescriptions(DailyRecord record, AiPrescriptionCategory category, String recommendationText) {
+  public AiPrescriptions(DailyRecord record, AiPrescriptionCategory category, String recommendationText, String journalExplain) {
     this.record = record;
     this.category = category;
     this.recommendationText = recommendationText;
+    this.journalExplain = journalExplain;
   }
 }
