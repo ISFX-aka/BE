@@ -23,6 +23,24 @@ public class CreateRecordResponseDto {
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate recordDate;
 
+    @JsonProperty("emotion_level")
+    private Integer emotionLevel;
+
+    @JsonProperty("conversation_level")
+    private Integer conversationLevel;
+
+    @JsonProperty("meeting_count")
+    private Integer meetingCount;
+
+    @JsonProperty("transport_mode")
+    private String transportMode;
+
+    @JsonProperty("congestion_level")
+    private Integer congestionLevel;
+
+    @JsonProperty("location")
+    private String location;
+
     @JsonProperty("journal")
     private String journal;
 
@@ -35,6 +53,10 @@ public class CreateRecordResponseDto {
     @JsonProperty("created_at")
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'")
     private LocalDateTime createdAt;
+
+    @JsonProperty("updated_at")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss'Z'")
+    private LocalDateTime updatedAt;
 
     @JsonProperty("ai_prescription")
     private AiPrescriptionDto aiPrescription;

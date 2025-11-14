@@ -2,6 +2,7 @@ package com.isfx.shim.controller;
 
 import com.isfx.shim.dto.CreateRecordRequest;
 import com.isfx.shim.dto.CreateRecordResponseDto;
+import com.isfx.shim.dto.UpdateRecordRequest;
 import com.isfx.shim.global.common.ApiResponse;
 import com.isfx.shim.global.security.UserDetailsImpl;
 import com.isfx.shim.service.RecordService;
@@ -34,5 +35,21 @@ public class RecordController {
         CreateRecordResponseDto response = recordService.createRecord(userId, request);
         
         return ApiResponse.created(response);
+    }
+
+    /**
+     * 기록 수정 API
+     */
+    @PutMapping("/{recordId}")
+    @ResponseStatus(HttpStatus.OK)
+    public ApiResponse<CreateRecordResponseDto> updateRecord(
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
+            @PathVariable("recordId") Long recordId,
+            @Valid @RequestBody UpdateRecordRequest request) {
+
+        Long userId = userDetails.getUser().getId();
+        CreateRecordResponseDto response = recordService.updateRecord(userId, recordId, request);
+
+        return ApiResponse.success(response);
     }
 }

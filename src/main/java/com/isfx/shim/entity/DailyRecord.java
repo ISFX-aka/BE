@@ -96,4 +96,18 @@ public class DailyRecord {
         this.energyScore = energyScore;
         this.energyLevel = energyLevel;
     }
+
+    public void updateRecord(Integer emotionLevel, Integer conversationLevel, Integer meetingCount,
+                             TransportMode transportMode, Integer congestionLevel, String location,
+                             String journal, double energyScore, EnergyLevel energyLevel) {
+        this.emotionLevel = emotionLevel;
+        this.conversationLevel = conversationLevel;
+        this.meetingCount = meetingCount != null ? meetingCount : 0;
+        this.transportMode = transportMode;
+        this.congestionLevel = congestionLevel;
+        this.location = location;
+        this.journal = journal;
+        this.energyScore = energyScore;
+        this.energyLevel = energyLevel;
+    }
 }
