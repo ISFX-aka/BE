@@ -46,4 +46,10 @@ public class AiPrescriptions {
     this.recommendationText = recommendationText;
     this.journalExplain = journalExplain;
   }
+
+  public void update(AiPrescriptionCategory category, String recommendationText, String journalExplain) {
+    this.category = category;
+    this.recommendationText = recommendationText;
+    this.journalExplain = journalExplain;
+  }
 }

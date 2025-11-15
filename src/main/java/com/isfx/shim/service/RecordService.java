@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.isfx.shim.dto.CreateRecordRequest;
 import com.isfx.shim.dto.CreateRecordResponseDto;
+import com.isfx.shim.dto.UpdateRecordRequest;
+import com.isfx.shim.dto.RecordSummaryDto;
 import com.isfx.shim.entity.*;
 import com.isfx.shim.entity.enums.*;
 import com.isfx.shim.global.exception.CustomException;
@@ -18,6 +20,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.YearMonth;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -48,6 +53,11 @@ public class RecordService {
         LocalDate recordDate = LocalDate.now();
         TimePeriod timePeriod = determineTimePeriod();
 
+        // 이미 오늘 기록이 존재하는지 확인
+        if (dailyRecordRepository.existsByUserAndRecordDate(user, recordDate)) {
+            throw new CustomException(ErrorCode.RECORD_ALREADY_EXISTS);
+        }
+
         // 3. TransportMode enum 변환
         TransportMode transportMode = convertTransportMode(request.getTransportMode());
 
@@ -62,15 +72,133 @@ public class RecordService {
 
         // 7. DailyRecord 생성 및 저장
         DailyRecord dailyRecord = createDailyRecord(
-                user, recordDate, timePeriod, request, transportMode, energyScore, energyLevel
+                user, recordDate, timePeriod, request, transportMode, energyScore, energyLevel, weatherLog
         );
         dailyRecord = dailyRecordRepository.save(dailyRecord);
 
         // 8. AI 처방 생성 (Upstage API 연동)
-        AiPrescriptions aiPrescription = generateAiPrescription(dailyRecord, request, energyScore, energyLevel, weatherLog);
+        AiPrescriptions aiPrescription = generateAiPrescription(dailyRecord, request, energyScore, energyLevel, weatherLog, null);
 
         // 9. 응답 DTO 생성
         return buildResponseDto(dailyRecord, aiPrescription, weatherLog);
+    }
+
+    /**
+     * 기록 수정
+     */
+    @Transactional
+    public CreateRecordResponseDto updateRecord(Long userId, Long recordId, UpdateRecordRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        DailyRecord dailyRecord = dailyRecordRepository.findById(recordId)
+                .orElseThrow(() -> new CustomException(ErrorCode.RECORD_NOT_FOUND));
+
+        if (!dailyRecord.getUser().getId().equals(user.getId())) {
+            throw new CustomException(ErrorCode.RECORD_FORBIDDEN);
+        }
+
+        TransportMode transportMode = convertTransportMode(request.getTransportMode());
+        WeatherLog weatherLog = weatherService.fetchWeatherData(request.getLocation());
+        double energyScore = calculateEnergyScore(request, transportMode, weatherLog);
+        EnergyLevel energyLevel = determineEnergyLevel(energyScore);
+
+        dailyRecord.updateRecord(
+                request.getEmotionLevel(),
+                request.getConversationLevel(),
+                request.getMeetingCount(),
+                transportMode,
+                request.getCongestionLevel(),
+                request.getLocation(),
+                request.getJournal(),
+                energyScore,
+                energyLevel,
+                weatherLog
+        );
+        dailyRecord = dailyRecordRepository.save(dailyRecord);
+
+        AiPrescriptions existingPrescription = aiPrescriptionsRepository.findByRecord(dailyRecord).orElse(null);
+        AiPrescriptions aiPrescription = generateAiPrescription(
+                dailyRecord,
+                request,
+                energyScore,
+                energyLevel,
+                weatherLog,
+                existingPrescription
+        );
+
+        return buildResponseDto(dailyRecord, aiPrescription, weatherLog);
+    }
+
+    /**
+     * 기록 삭제
+     */
+    @Transactional
+    public void deleteRecord(Long userId, Long recordId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        DailyRecord dailyRecord = dailyRecordRepository.findById(recordId)
+                .orElseThrow(() -> new CustomException(ErrorCode.RECORD_NOT_FOUND));
+
+        if (!dailyRecord.getUser().getId().equals(user.getId())) {
+            throw new CustomException(ErrorCode.RECORD_FORBIDDEN);
+        }
+
+        aiPrescriptionsRepository.findByRecord(dailyRecord)
+                .ifPresent(aiPrescriptionsRepository::delete);
+        dailyRecordRepository.delete(dailyRecord);
+    }
+
+    /**
+     * 기록 상세 조회
+     */
+    @Transactional(readOnly = true)
+    public CreateRecordResponseDto getRecordDetail(Long userId, Long recordId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        DailyRecord dailyRecord = dailyRecordRepository.findById(recordId)
+                .orElseThrow(() -> new CustomException(ErrorCode.RECORD_NOT_FOUND));
+
+        if (!dailyRecord.getUser().getId().equals(user.getId())) {
+            throw new CustomException(ErrorCode.RECORD_FORBIDDEN);
+        }
+
+        AiPrescriptions aiPrescription = aiPrescriptionsRepository.findByRecord(dailyRecord)
+                .orElse(null);
+
+        WeatherLog weatherLog = dailyRecord.getWeatherLog();
+
+        return buildResponseDto(dailyRecord, aiPrescription, weatherLog);
+    }
+
+    /**
+     * 월별 기록 요약 조회
+     */
+    @Transactional(readOnly = true)
+    public List<RecordSummaryDto> getMonthlyRecords(Long userId, Integer year, Integer month) {
+        if (year == null || month == null || month < 1 || month > 12) {
+            throw new CustomException(ErrorCode.INVALID_REQUEST);
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        YearMonth yearMonth = YearMonth.of(year, month);
+        LocalDate startDate = yearMonth.atDay(1);
+        LocalDate endDate = yearMonth.atEndOfMonth();
+
+        List<DailyRecord> records = dailyRecordRepository.findAllByUserAndRecordDateBetween(
+                user, startDate, endDate);
+
+        return records.stream()
+                .map(record -> RecordSummaryDto.builder()
+                        .recordId(record.getId())
+                        .recordDate(record.getRecordDate())
+                        .energyScore(record.getEnergyScore())
+                        .build())
+                .collect(Collectors.toList());
     }
 
     /**
@@ -347,7 +475,7 @@ public class RecordService {
     private DailyRecord createDailyRecord(
             User user, LocalDate recordDate, TimePeriod timePeriod,
             CreateRecordRequest request, TransportMode transportMode,
-            double energyScore, EnergyLevel energyLevel) {
+            double energyScore, EnergyLevel energyLevel, WeatherLog weatherLog) {
         
         // meetingCount가 null이면 기본값 0으로 설정
         Integer meetingCount = request.getMeetingCount() != null ? request.getMeetingCount() : 0;
@@ -365,6 +493,7 @@ public class RecordService {
                 .journal(request.getJournal())
                 .energyScore(energyScore)
                 .energyLevel(energyLevel)
+                .weatherLog(weatherLog)
                 .build();
     }
 
@@ -372,15 +501,15 @@ public class RecordService {
      * AI 처방 생성 (Upstage API 연동)
      */
     private AiPrescriptions generateAiPrescription(
-            DailyRecord dailyRecord, CreateRecordRequest request, double energyScore, 
-            EnergyLevel energyLevel, WeatherLog weatherLog) {
-        
+            DailyRecord dailyRecord, CreateRecordRequest request, double energyScore,
+            EnergyLevel energyLevel, WeatherLog weatherLog, AiPrescriptions existingPrescription) {
+
+        // 카테고리 결정: LOW/MEDIUM → recovery, HIGH → social
+        AiPrescriptionCategory category = (energyLevel == EnergyLevel.HIGH)
+                ? AiPrescriptionCategory.social
+                : AiPrescriptionCategory.recovery;
+
         try {
-            // 카테고리 결정: LOW/MEDIUM → recovery, HIGH → social
-            AiPrescriptionCategory category = (energyLevel == EnergyLevel.HIGH) 
-                    ? AiPrescriptionCategory.social 
-                    : AiPrescriptionCategory.recovery;
-            
             // 프롬프트 구성 데이터 준비
             String journal = dailyRecord.getJournal() != null ? dailyRecord.getJournal() : "";
             String weatherCondition = weatherLog != null && weatherLog.getCondition() != null 
@@ -430,11 +559,11 @@ public class RecordService {
             
             // Upstage API 호출
             String apiResponse = upstageChatClient.generateChatResponse(systemPrompt, userPrompt);
-            
+
             // JSON 파싱
             String journalExplain = parseJsonField(apiResponse, "journal_explain");
             String recommendationText = parseJsonField(apiResponse, "recommendation_text");
-            
+
             // 파싱 실패 시 기본값 사용
             if (journalExplain == null || journalExplain.trim().isEmpty()) {
                 journalExplain = generateDefaultJournalExplain(journal, weatherLog, energyLevel);
@@ -442,38 +571,38 @@ public class RecordService {
             if (recommendationText == null || recommendationText.trim().isEmpty()) {
                 recommendationText = generateDefaultRecommendationText(energyLevel, category);
             }
-            
-            // AiPrescriptions 생성
-            AiPrescriptions prescription = AiPrescriptions.builder()
-                    .record(dailyRecord)
-                    .category(category)
-                    .recommendationText(recommendationText)
-                    .journalExplain(journalExplain)
-                    .build();
-            
-            return aiPrescriptionsRepository.save(prescription);
-            
+
+            return persistAiPrescription(dailyRecord, category, recommendationText, journalExplain, existingPrescription);
+
         } catch (Exception e) {
             log.error("[AI 처방 생성] Upstage API 호출 실패, 기본값 사용: error={}", e.getMessage(), e);
-            
-            // 에러 발생 시 기본값으로 생성
-            AiPrescriptionCategory category = (energyLevel == EnergyLevel.HIGH) 
-                    ? AiPrescriptionCategory.social 
-                    : AiPrescriptionCategory.recovery;
-            
+
             String journalExplain = generateDefaultJournalExplain(
                     dailyRecord.getJournal(), weatherLog, energyLevel);
             String recommendationText = generateDefaultRecommendationText(energyLevel, category);
-            
-            AiPrescriptions prescription = AiPrescriptions.builder()
-                    .record(dailyRecord)
-                    .category(category)
-                    .recommendationText(recommendationText)
-                    .journalExplain(journalExplain)
-                    .build();
-            
-            return aiPrescriptionsRepository.save(prescription);
+
+            return persistAiPrescription(dailyRecord, category, recommendationText, journalExplain, existingPrescription);
         }
+    }
+    
+    private AiPrescriptions persistAiPrescription(
+            DailyRecord dailyRecord,
+            AiPrescriptionCategory category,
+            String recommendationText,
+            String journalExplain,
+            AiPrescriptions existingPrescription) {
+        if (existingPrescription != null) {
+            existingPrescription.update(category, recommendationText, journalExplain);
+            return aiPrescriptionsRepository.save(existingPrescription);
+        }
+
+        AiPrescriptions prescription = AiPrescriptions.builder()
+                .record(dailyRecord)
+                .category(category)
+                .recommendationText(recommendationText)
+                .journalExplain(journalExplain)
+                .build();
+        return aiPrescriptionsRepository.save(prescription);
     }
     
     /**
@@ -576,31 +705,43 @@ public class RecordService {
     private CreateRecordResponseDto buildResponseDto(
             DailyRecord dailyRecord, AiPrescriptions aiPrescription, WeatherLog weatherLog) {
         
-        CreateRecordResponseDto.AiPrescriptionDto aiPrescriptionDto =
-                CreateRecordResponseDto.AiPrescriptionDto.builder()
-                        .id(aiPrescription.getPrescription_id())
-                        .category(aiPrescription.getCategory().name())
-                        .recommendationText(aiPrescription.getRecommendationText())
-                        .journalExplain(aiPrescription.getJournalExplain())
-                        .build();
+        CreateRecordResponseDto.AiPrescriptionDto aiPrescriptionDto = null;
+        if (aiPrescription != null) {
+            aiPrescriptionDto = CreateRecordResponseDto.AiPrescriptionDto.builder()
+                    .id(aiPrescription.getPrescription_id())
+                    .category(aiPrescription.getCategory().name())
+                    .recommendationText(aiPrescription.getRecommendationText())
+                    .journalExplain(aiPrescription.getJournalExplain())
+                    .build();
+        }
 
-        CreateRecordResponseDto.WeatherLogDto weatherLogDto =
-                CreateRecordResponseDto.WeatherLogDto.builder()
-                        .id(weatherLog.getWeather_log_id())
-                        .location(weatherLog.getLocation())
-                        .condition(weatherLog.getCondition() != null ? weatherLog.getCondition().name() : null)
-                        .temperature(weatherLog.getTemperature())
-                        .pm10(weatherLog.getPm10() != null ? weatherLog.getPm10().intValue() : null)
-                        .build();
+        CreateRecordResponseDto.WeatherLogDto weatherLogDto = null;
+        if (weatherLog != null) {
+            weatherLogDto = CreateRecordResponseDto.WeatherLogDto.builder()
+                    .id(weatherLog.getWeather_log_id())
+                    .location(weatherLog.getLocation())
+                    .observedAt(weatherLog.getObserved_at())
+                    .condition(weatherLog.getCondition() != null ? weatherLog.getCondition().name() : null)
+                    .temperature(weatherLog.getTemperature())
+                    .pm10(weatherLog.getPm10() != null ? weatherLog.getPm10().intValue() : null)
+                    .build();
+        }
 
         return CreateRecordResponseDto.builder()
                 .recordId(dailyRecord.getId())
                 .userId(dailyRecord.getUser().getId())
                 .recordDate(dailyRecord.getRecordDate())
+                .emotionLevel(dailyRecord.getEmotionLevel())
+                .conversationLevel(dailyRecord.getConversationLevel())
+                .meetingCount(dailyRecord.getMeetingCount())
+                .transportMode(dailyRecord.getTransportMode() != null ? dailyRecord.getTransportMode().name().toLowerCase() : null)
+                .congestionLevel(dailyRecord.getCongestionLevel())
+                .location(dailyRecord.getLocation())
                 .journal(dailyRecord.getJournal())
                 .energyScore(dailyRecord.getEnergyScore())
                 .energyLevel(dailyRecord.getEnergyLevel())
                 .createdAt(dailyRecord.getCreatedAt())
+                .updatedAt(dailyRecord.getUpdatedAt())
                 .aiPrescription(aiPrescriptionDto)
                 .weatherLog(weatherLogDto)
                 .build();

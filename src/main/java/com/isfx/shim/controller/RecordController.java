@@ -2,6 +2,8 @@ package com.isfx.shim.controller;
 
 import com.isfx.shim.dto.CreateRecordRequest;
 import com.isfx.shim.dto.CreateRecordResponseDto;
+import com.isfx.shim.dto.UpdateRecordRequest;
+import com.isfx.shim.dto.RecordSummaryDto;
 import com.isfx.shim.global.common.ApiResponse;
 import com.isfx.shim.global.security.UserDetailsImpl;
 import com.isfx.shim.service.RecordService;
@@ -10,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -34,5 +38,65 @@ public class RecordController {
         CreateRecordResponseDto response = recordService.createRecord(userId, request);
         
         return ApiResponse.created(response);
+    }
+
+    /**
+     * 기록 수정 API
+     */
+    @PutMapping("/{recordId}")
+    @ResponseStatus(HttpStatus.OK)
+    public ApiResponse<CreateRecordResponseDto> updateRecord(
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
+            @PathVariable("recordId") Long recordId,
+            @Valid @RequestBody UpdateRecordRequest request) {
+
+        Long userId = userDetails.getUser().getId();
+        CreateRecordResponseDto response = recordService.updateRecord(userId, recordId, request);
+
+        return ApiResponse.success(response);
+    }
+
+    /**
+     * 기록 상세 조회 API
+     */
+    @GetMapping("/{recordId}")
+    @ResponseStatus(HttpStatus.OK)
+    public ApiResponse<CreateRecordResponseDto> getRecord(
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
+            @PathVariable("recordId") Long recordId) {
+
+        Long userId = userDetails.getUser().getId();
+        CreateRecordResponseDto response = recordService.getRecordDetail(userId, recordId);
+
+        return ApiResponse.success(response);
+    }
+
+    /**
+     * 월별 기록 요약 조회 API
+     */
+    @GetMapping
+    @ResponseStatus(HttpStatus.OK)
+    public ApiResponse<List<RecordSummaryDto>> getMonthlyRecords(
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
+            @RequestParam("year") Integer year,
+            @RequestParam("month") Integer month) {
+
+        Long userId = userDetails.getUser().getId();
+        List<RecordSummaryDto> response = recordService.getMonthlyRecords(userId, year, month);
+
+        return ApiResponse.success(response);
+    }
+
+    /**
+     * 기록 삭제 API
+     */
+    @DeleteMapping("/{recordId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteRecord(
+            @AuthenticationPrincipal UserDetailsImpl userDetails,
+            @PathVariable("recordId") Long recordId) {
+
+        Long userId = userDetails.getUser().getId();
+        recordService.deleteRecord(userId, recordId);
     }
 }
