@@ -11,6 +11,12 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -20,37 +26,64 @@ public class SecurityConfig {
     private final JwtUtil jwtUtil;
     private final UserDetailsServiceImpl userDetailsService;
 
-    // 1. 인증 필터 Bean으로 등록
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter() {
         return new JwtAuthenticationFilter(jwtUtil, userDetailsService);
     }
 
-    // 2. SecurityFilterChain 설정
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        // CSRF 설정 비활성화 (JWT 사용 시 불필요)
+
+        // 1. CSRF 비활성화
         http.csrf((csrf) -> csrf.disable());
 
-        // Session 정책 설정: STATELESS (세션 사용 안 함)
+        // 2. CORS 설정 추가
+        http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
+
+        // 3. Session 비활성화
         http.sessionManagement((sessionManagement) ->
                 sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
         );
 
-        // 3. URL별 인가(Authorization) 설정
+        // 4. URL별 권한 설정
         http.authorizeHttpRequests((authorizeHttpRequests) ->
                 authorizeHttpRequests
-                        // 소셜 로그인 API 모두 허용
                         .requestMatchers("/api/auth/**").permitAll()
-                        // Swagger UI 관련 경로 모두 허용
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
-                        // 그 외 모든 요청은 인증(토큰) 필요
                         .anyRequest().authenticated()
         );
 
-        // 4. JwtAuthenticationFilter를 UsernamePasswordAuthenticationFilter (기본 로그인 필터) 앞에 추가
+        // 5. 필터 추가
         http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    // 6. CORS 허용 설정 Bean
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+
+        // 허용할 프론트엔드 주소 (리스트로 담을 수 있음)
+        configuration.setAllowedOrigins(List.of(
+                "http://localhost:3000",       // 로컬 React
+                "http://3.36.228.115:8080"     // 배포된 서버 (필요시)
+        ));
+
+        // 허용할 HTTP 메서드
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+
+        // 허용할 헤더
+        configuration.setAllowedHeaders(List.of("*"));
+
+        // 쿠키/인증 정보 포함 허용 (JWT 사용 시 필수)
+        configuration.setAllowCredentials(true);
+
+        // 브라우저가 이 헤더를 읽을 수 있게 허용 (JWT 토큰 등을 헤더로 보낼 때 필요)
+        configuration.setExposedHeaders(List.of("Authorization"));
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 }
