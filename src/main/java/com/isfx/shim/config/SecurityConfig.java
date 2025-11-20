@@ -67,7 +67,8 @@ public class SecurityConfig {
         // 허용할 프론트엔드 주소 (리스트로 담을 수 있음)
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:3000",       // 로컬 React
-                "http://3.36.228.115:8080"     // 배포된 서버 (필요시)
+                "http://3.36.228.115:8080",     // 배포된 서버 (필요시)
+                "http://localhost:5173"       // 로컬 Vite
         ));
 
         // 허용할 HTTP 메서드
