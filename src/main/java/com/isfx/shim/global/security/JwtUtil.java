@@ -43,13 +43,12 @@ public class JwtUtil {
     public String createToken(String username) {
         Date date = new Date();
 
-        return BEARER_PREFIX +
-                Jwts.builder()
-                        .setSubject(username) // 사용자 식별값(ID, email 등)
-                        .setExpiration(new Date(date.getTime() + TOKEN_TIME)) // 만료 시간
-                        .setIssuedAt(date) // 발급일
-                        .signWith(key, signatureAlgorithm) // 암호화 알고리즘
-                        .compact();
+        return Jwts.builder()
+                .setSubject(username)
+                .setExpiration(new Date(date.getTime() + TOKEN_TIME))
+                .setIssuedAt(date)
+                .signWith(key, signatureAlgorithm)
+                .compact();
     }
 
     // 4. Header에서 JWT 토큰 가져오기
