@@ -54,9 +54,9 @@ public class RecordService {
         TimePeriod timePeriod = determineTimePeriod();
 
         // 이미 오늘 기록이 존재하는지 확인
-        if (dailyRecordRepository.existsByUserAndRecordDate(user, recordDate)) {
-            throw new CustomException(ErrorCode.RECORD_ALREADY_EXISTS);
-        }
+        // if (dailyRecordRepository.existsByUserAndRecordDate(user, recordDate)) {
+        //     throw new CustomException(ErrorCode.RECORD_ALREADY_EXISTS);
+        // }
 
         // 3. TransportMode enum 변환
         TransportMode transportMode = convertTransportMode(request.getTransportMode());
