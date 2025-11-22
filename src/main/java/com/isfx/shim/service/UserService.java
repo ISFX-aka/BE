@@ -10,6 +10,7 @@ import com.isfx.shim.entity.User;
 import com.isfx.shim.global.exception.CustomException;
 import com.isfx.shim.global.exception.ErrorCode;
 import com.isfx.shim.global.util.S3Util;
+import com.isfx.shim.repository.AiPrescriptionsRepository; //[fix3]
 import com.isfx.shim.repository.DailyRecordRepository;
 import com.isfx.shim.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,9 @@ public class UserService {
     private final UserRepository userRepository;
     private final S3Util s3Util;
     private final DailyRecordRepository dailyRecordRepository; // [추가] 통계용
+
+    // [수정] 팀원이 만든 Repository 주입 (AiPrescriptionsRepository) [fix3]
+    private final AiPrescriptionsRepository aiPrescriptionsRepository;
 
     /**
      * 프로필 사진 수정
@@ -128,6 +132,14 @@ public class UserService {
         String profileImageUrl = user.getProfileImageUrl();
         if (profileImageUrl != null && !profileImageUrl.isEmpty()) {
             s3Util.deleteFile(profileImageUrl);
+        }
+
+        List<DailyRecord> userRecords = dailyRecordRepository.findAllByUser(user);
+
+        // 기록에 연결된 AI 처방(자식 데이터) 먼저 삭제 [fix3]
+        if (!userRecords.isEmpty()) {
+            // 팀원이 만든 엔티티/레포지토리 사용 (deleteAllByRecordIn)
+            aiPrescriptionsRepository.deleteAllByRecordIn(userRecords);
         }
 
         // 사용자가 작성한 DailyRecord(일기/기록) 모두 삭제
