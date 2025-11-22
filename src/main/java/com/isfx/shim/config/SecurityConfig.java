@@ -68,7 +68,7 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:3000",       // 로컬 React
                 "http://3.36.228.115:8080",     // 배포된 서버 (필요시)
-                "http://localhost:5173",g      // 로컬 Vite
+                "http://localhost:5173",      // 로컬 Vite
                 "https://2025-ganzi-thon-isfx-fe.vercel.app/" // 배포 프론트
         ));
 
