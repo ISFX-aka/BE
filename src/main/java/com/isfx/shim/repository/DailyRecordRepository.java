@@ -15,4 +15,7 @@ public interface DailyRecordRepository extends JpaRepository<DailyRecord, Long> 
     boolean existsByUserAndRecordDate(User user, LocalDate recordDate);
 
     Optional<DailyRecord> findByIdAndUser(Long recordId, User user);
+
+    // [추가] 회원 탈퇴 시 해당 사용자의 모든 기록 삭제
+    void deleteAllByUser(User user);
 }
