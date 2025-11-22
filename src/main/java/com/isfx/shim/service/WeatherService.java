@@ -62,10 +62,13 @@ public class WeatherService {
             KmaWeatherResponseDto weather = kmaWeatherClient.getWeather(coordinate.nx(), coordinate.ny());
             temperature = weather.getTemperature();
             condition = mapCondition(weather.getSkyCode(), weather.getPrecipitationType());
-            log.info("[날씨 API] 기상청 초단기실황 API 호출 성공: location={}, temperature={}, condition={}", normalizedLocation, temperature, condition);
+            log.info("[날씨 API] 기상청 초단기실황 API 호출 성공: location={}, temperature={}, condition={}, skyCode={}, precipitationType={}",
+                    normalizedLocation, temperature, condition, weather.getSkyCode(), weather.getPrecipitationType());
+
         } catch (Exception e) {
-            log.error("[날씨 API] 기상청 초단기실황 API 호출 실패, null로 저장: location={}, nx={}, ny={}, error={}", 
+            log.error("[날씨 API] 기상청 초단기실황 API 호출 실패, null로 저장: location={}, nx={}, ny={}, skyCode=N/A, precipitationType=N/A, error={}",
                     normalizedLocation, coordinate.nx(), coordinate.ny(), e.getMessage(), e);
+
             // 날씨 API 호출 실패 시 null로 저장
             temperature = null;
             condition = null;
