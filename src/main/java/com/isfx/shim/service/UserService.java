@@ -116,13 +116,28 @@ public class UserService {
         return UserUpdateResDto.fromEntity(user);
     }
 
-    // DELETE /api/users/me (회원 탈퇴 - 논리 삭제)
+    // DELETE /api/users/me (회원 탈퇴 - 논리 삭제) -> 물리 삭제
+    // [피드백 반영] DB에서 사용자 데이터 및 기록 완전 삭제
 
     @Transactional
     public void deleteUser(Long userId) {
+        // 사용자 조회
         User user = findActiveUserById(userId);
-        user.softDelete(); // Entity의 논리 삭제 메서드 호출
-        // (@Transactional로 인해 자동 저장)
+
+        // 프로필 이미지 삭제
+        String profileImageUrl = user.getProfileImageUrl();
+        if (profileImageUrl != null && !profileImageUrl.isEmpty()) {
+            s3Util.deleteFile(profileImageUrl);
+        }
+
+        // 사용자가 작성한 DailyRecord(일기/기록) 모두 삭제
+        // -> (외래키 제약 조건 방지: 자식 데이터를 먼저 삭제해야 함)
+        dailyRecordRepository.deleteAllByUser(user);
+
+        // 사용자 Entity 물리 삭제 (DB에서 행 삭제)
+        userRepository.delete(user);
+
+        log.info("회원 탈퇴(물리 삭제) 완료: userId={}", userId);
     }
 
     // GET /api/users/me/status (내 활동 통계 조회)
